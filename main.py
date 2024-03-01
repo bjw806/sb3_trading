@@ -1,16 +1,31 @@
-# 샘플 Python 스크립트입니다.
-
-# Shift+F10을(를) 눌러 실행하거나 내 코드로 바꿉니다.
-# 클래스, 파일, 도구 창, 액션 및 설정을 어디서나 검색하려면 Shift 두 번을(를) 누릅니다.
-
-
-def print_hi(name):
-    # 스크립트를 디버그하려면 하단 코드 줄의 중단점을 사용합니다.
-    print(f'Hi, {name}')  # 중단점을 전환하려면 Ctrl+F8을(를) 누릅니다.
+import gym_trading_env  # noqa
+import gymnasium as gym
+from stable_baselines3 import A2C
 
 
-# 스크립트를 실행하려면 여백의 녹색 버튼을 누릅니다.
-if __name__ == '__main__':
-    print_hi('PyCharm')
+def run1():
+    env = gym.make(
+        "MultiDatasetTradingEnv",
+        dataset_dir="D:/Destktop/PyCharm_Projects/rl/data/train/month_1h/**/*.pkl",
+        positions=[-1, 0, 1],
+        trading_fees=0.01 / 100,
+        borrow_interest_rate=(0.0003 / 100),
+    )
 
-# https://www.jetbrains.com/help/pycharm/에서 PyCharm 도움말 참조
+    model = A2C("MlpPolicy", env, verbose=1)
+    model.learn(total_timesteps=10_000)
+
+    vec_env = model.get_env()
+    obs = vec_env.reset()
+
+    for i in range(1000):
+        action, _state = model.predict(obs, deterministic=True)
+        obs, reward, done, info = vec_env.step(action)
+        vec_env.render("human")
+        # VecEnv resets automatically
+        # if done:
+        #   obs = vec_env.reset()
+
+
+if __name__ == "__main__":
+    run1()
