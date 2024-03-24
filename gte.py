@@ -26,26 +26,23 @@ def reward_only_position_changed(history):
         return -1
 
     prev_position = history["position", -2]
-    # curr_position = history["position", -1]
-    # holding_fee = 0.01
-    # holding_cost = 0
+    curr_position = history["position", -1]
 
-    index = 1
-    index_limit = len(history)
+    position_roe = (
+        history["portfolio_valuation", -1]
+        / history["entry_valuation", -1]
+        - 1
+    )
+    total_roe = (
+        history["portfolio_valuation", -1] / history["portfolio_valuation", 0] - 1
+    ) # / sqrt(index)
 
-    while index < index_limit and history["position", -index] == prev_position:
-        index += 1
-        # holding_cost -= holding_fee
 
-    # if prev_position == curr_position:
-    #     if curr_position == 0:
-    #         return holding_cost
-    #     else:
-    #         return 0
-    # else:
-    return (
-        history["portfolio_valuation", -1] / history["portfolio_valuation", -index] - 1
-    )  # / sqrt(index)
+
+    if prev_position == curr_position:
+        return 0
+    else:
+        return position_roe + total_roe
 
 
 def dynamic_feature_last_position_taken(history):
