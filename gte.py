@@ -62,7 +62,7 @@ class DiscretedTradingEnv(gym.Env):
         positions: list = [0, 1],
         dynamic_feature_functions: list = [
             dynamic_feature_last_position_taken,
-            dynamic_feature_real_position,
+            # dynamic_feature_real_position,
         ],
         reward_function: Callable = reward_only_position_changed,
         window_size: int = None,
@@ -103,9 +103,9 @@ class DiscretedTradingEnv(gym.Env):
                 "total_ROE": spaces.Box(
                     low=-1, high=np.inf, shape=(1,), dtype=np.float64
                 ),
-                "position": spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(1,), dtype=np.int64
-                ),
+                # "position": spaces.Box(
+                #     low=-np.inf, high=np.inf, shape=(1,), dtype=np.int64
+                # ),
                 "PNL": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
@@ -191,7 +191,7 @@ class DiscretedTradingEnv(gym.Env):
                 / self.portfolio_initial_value
                 - 1
             ),
-            "position": np.int64(self.historical_info["position", -1]),
+            # "position": np.int64(self.historical_info["position", -1]),
             "PNL": np.float64(self.historical_info["PNL", -1]),
             "ROE": np.float64(self.historical_info["ROE", -1]),
             "entry_price": np.float64(self.historical_info["entry_price", -1]),
@@ -331,7 +331,7 @@ class DiscretedTradingEnv(gym.Env):
         )
         # if not done:
         # if self._position != self.positions[position_index]:
-        self.historical_info["reward", -1] = self.reward_function(self.historical_info)
+        
         self.historical_info["PNL", -1] = (
             self.historical_info["portfolio_valuation", -1]
             - self.historical_info["entry_valuation", -1]
@@ -344,6 +344,7 @@ class DiscretedTradingEnv(gym.Env):
         )
 
         if done or truncated:
+            self.historical_info["reward", -1] = self.reward_function(self.historical_info)
             self.calculate_metrics()
             self.log()
 
