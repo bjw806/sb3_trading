@@ -89,6 +89,8 @@ class DiscretedTradingEnv(gym.Env):
         self.borrow_interest_rate = borrow_interest_rate
         self.portfolio_initial_value = float(portfolio_initial_value)
         self.initial_position = initial_position
+        self.last_trade_position = 0
+        self.last_trade_position_index = 0
 
         # env
         self.max_episode_duration = max_episode_duration
@@ -99,9 +101,9 @@ class DiscretedTradingEnv(gym.Env):
         self.action_space = spaces.Discrete(len(positions))
         self.observation_space = spaces.Dict(
             {
-                "equity": spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float64),
+                "equity": spaces.Box(low=0, high=np.inf, shape=(1,), dtype=np.float32),
                 "total_ROE": spaces.Box(
-                    low=-1, high=np.inf, shape=(1,), dtype=np.float64
+                    low=-1, high=np.inf, shape=(1,), dtype=np.float32
                 ),
                 # "position": spaces.Box(
                 #     low=-np.inf, high=np.inf, shape=(1,), dtype=np.int64
@@ -110,14 +112,14 @@ class DiscretedTradingEnv(gym.Env):
                     low=-np.inf,
                     high=np.inf,
                     shape=(1,),
-                    dtype=np.float64,
+                    dtype=np.float32,
                 ),
-                "ROE": spaces.Box(low=-1, high=np.inf, shape=(1,), dtype=np.float64),
+                "ROE": spaces.Box(low=-1, high=np.inf, shape=(1,), dtype=np.float32),
                 "entry_price": spaces.Box(
                     low=-np.inf,
                     high=np.inf,
                     shape=(1,),
-                    dtype=np.float64,
+                    dtype=np.float32,
                 ),
                 "features": spaces.Box(
                     low=-np.inf,
@@ -125,7 +127,7 @@ class DiscretedTradingEnv(gym.Env):
                     shape=[self.window_size, self._nb_features]
                     if window_size
                     else [self._nb_features],
-                    dtype=np.float64,
+                    dtype=np.float32,
                 ),
             }
         )
@@ -145,7 +147,7 @@ class DiscretedTradingEnv(gym.Env):
             self._nb_features += 1
 
         self.df = df
-        self._obs_array = np.array(self.df[self._features_columns], dtype=np.float64)
+        self._obs_array = np.array(self.df[self._features_columns], dtype=np.float32)
         self._info_array = np.array(self.df[self._info_columns])
         self._price_array = np.array(self.df["close"])
 
@@ -185,16 +187,16 @@ class DiscretedTradingEnv(gym.Env):
         )
 
         observation = {
-            "equity": np.float64(self.historical_info["portfolio_valuation", -1]),
-            "total_ROE": np.float64(
+            "equity": np.float32(self.historical_info["portfolio_valuation", -1]),
+            "total_ROE": np.float32(
                 self.historical_info["portfolio_valuation", -1]
                 / self.portfolio_initial_value
                 - 1
             ),
             # "position": np.int64(self.historical_info["position", -1]),
-            "PNL": np.float64(self.historical_info["PNL", -1]),
-            "ROE": np.float64(self.historical_info["ROE", -1]),
-            "entry_price": np.float64(self.historical_info["entry_price", -1]),
+            "PNL": np.float32(self.historical_info["PNL", -1]),
+            "ROE": np.float32(self.historical_info["ROE", -1]),
+            "entry_price": np.float32(self.historical_info["entry_price", -1]),
             "features": self._obs_array[_step_index],
         }
 
@@ -243,6 +245,7 @@ class DiscretedTradingEnv(gym.Env):
             entry_valuation=self.portfolio_initial_value,
             PNL=0,
             ROE=0,
+            prev_position_valuation=self.portfolio_initial_value,
         )
 
         return self._get_obs(), self.historical_info[0]
@@ -262,6 +265,7 @@ class DiscretedTradingEnv(gym.Env):
     def _take_action(self, position):
         if position != self._position:
             self._trade(position)
+            self.last_trade_position_index = self._idx + 1
 
     def _take_action_order_limit(self):
         if len(self._limit_orders) > 0:
@@ -293,6 +297,8 @@ class DiscretedTradingEnv(gym.Env):
         portfolio_distribution = self._portfolio.get_portfolio_distribution()
 
         done, truncated = False, False
+
+        is_position_changed = position_index != self.last_trade_position
 
         if portfolio_value <= 0:
             done = True
@@ -328,10 +334,22 @@ class DiscretedTradingEnv(gym.Env):
             ),
             PNL=0,
             ROE=0,
+            prev_position_valuation=(
+                self._idx
+                if is_position_changed
+                else self.historical_info["prev_position_valuation", -1]
+            ),
         )
         # if not done:
         # if self._position != self.positions[position_index]:
         
+        self.historical_info["reward", -1] = (
+            -100 if done else (
+                self.reward_function(self.historical_info) 
+                if is_position_changed 
+                else 0
+            )
+        )
         self.historical_info["PNL", -1] = (
             self.historical_info["portfolio_valuation", -1]
             - self.historical_info["entry_valuation", -1]
@@ -344,7 +362,6 @@ class DiscretedTradingEnv(gym.Env):
         )
 
         if done or truncated:
-            self.historical_info["reward", -1] = self.reward_function(self.historical_info)
             self.calculate_metrics()
             self.log()
 
